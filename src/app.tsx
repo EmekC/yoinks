@@ -200,6 +200,22 @@ export function App({
     phase.name === 'input' && Boolean(process.stdin.isTTY),
   )
 
+  // Same idea for the done screen's "↵ yoink another" box: header(7) +
+  // yoinked line(1) + filepath(1) + gap(1) = 10 rows above the 3-row box,
+  // then gap(2) + shortcuts(1) below it.
+  const doneLabel = '↵ yoink another'
+  const doneBoxW = doneLabel.length + 8 // paddingX(3)×2 + borders
+  const doneBoxTop = Math.floor((rows - 1 - (10 + 3 + 3)) / 2) + 10 + 1
+  const doneBoxLeft = Math.floor((columns - doneBoxW) / 2) + 1
+  useMouseClick(
+    (x, y) => {
+      if (y >= doneBoxTop - 1 && y <= doneBoxTop + 3 && x >= doneBoxLeft - 1 && x <= doneBoxLeft + doneBoxW) {
+        resetToInput()
+      }
+    },
+    phase.name === 'done' && Boolean(process.stdin.isTTY),
+  )
+
   const handlePick = (item: {value: number}) => {
     const choice = choices[item.value]
     const controller = new AbortController()
@@ -363,7 +379,7 @@ export function App({
           <Text color={theme.gray}>{shortenPath(phase.filepath, os.homedir(), 60)}</Text>
           <Gap />
           <Box borderStyle="round" borderColor={theme.gray} paddingX={3}>
-            <Text bold color={theme.primary}>↵ yoink another</Text>
+            <Text bold color={theme.primary}>{doneLabel}</Text>
           </Box>
         </Box>
       )}
