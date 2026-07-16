@@ -21,6 +21,12 @@ no sketchy redirects.
 npm install -g yoinks
 ```
 
+Or try it without installing anything:
+
+```sh
+npx yoinks
+```
+
 Requires Node 18+. Everything else (yt-dlp, ffmpeg) is fetched or bundled
 automatically.
 
@@ -66,7 +72,8 @@ To try it as a global command without publishing: `npm link`, then run
 - [ ] Playlist / thread-with-multiple-videos support
 - [ ] Clipboard detection: launch bare and auto-suggest the url you copied
 - [ ] Self-update for the bundled yt-dlp binary (`yt-dlp -U`)
-- [ ] Publish to npm + `curl yoinks.sh | sh` installer
+- [x] Publish to npm (`npm i -g yoinks` / `npx yoinks`)
+- [ ] `curl yoinks.sh | sh` installer
 
 ## A note on fair use
 
