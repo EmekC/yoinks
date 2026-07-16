@@ -1,13 +1,11 @@
 # yoinks
 
 ```
-             _       _
- _   _  ___ (_)_ __ | | _____
-| | | |/ _ \| | '_ \| |/ / __|
-| |_| | (_) | | | | |   <\__ \
- \__, |\___/|_|_| |_|_|\_\___/
- |___/
-     yoink any video. paste. yoink. done.
+▓ ▓ █▀█ ▀█▀ █▀▄█ █ █ █▀▀
+▀█▀ █ ▓  ▓  █  ▓ ▓▀▄ ▀▀▓
+ ▀  ▀▀▀ ▀▀▀ ▀  ▀ ▀ ▀ ▀▀▀
+
+yoink any video. paste. yoink. done.
 ```
 
 Download videos from YouTube, X/Twitter, Instagram, Threads, TikTok and
