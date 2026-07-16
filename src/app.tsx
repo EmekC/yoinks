@@ -41,16 +41,21 @@ const Gap = ({lines = 1}: {lines?: number}) => (
 
 // fixed-width slots — the centered line must not change width as values tick,
 // otherwise the whole layout shifts on every progress update
+function partLabel(progress: DownloadProgress): string {
+  // explains the bar resetting between files (video, then audio)
+  return progress.totalParts > 1 ? `part ${progress.part + 1}/${progress.totalParts}  ` : ''
+}
+
 function downloadMeta(progress: DownloadProgress): string {
   const speed = progress.speed ? formatSpeed(progress.speed) : ''
   const eta = progress.eta ? `${formatEta(progress.eta)} left` : ''
-  return `${speed.padStart(10)}  ${eta.padEnd(12)}`
+  return `${partLabel(progress)}${speed.padStart(10)}  ${eta.padEnd(12)}`
 }
 
 function indeterminateMeta(progress: DownloadProgress): string {
   const bytes = formatBytes(progress.downloadedBytes)
   const speed = progress.speed ? formatSpeed(progress.speed) : ''
-  return `${bytes.padStart(8)}  ${speed.padEnd(10)}`
+  return `${partLabel(progress)}${bytes.padStart(8)}  ${speed.padEnd(10)}`
 }
 
 export type Outcome = {filepath?: string}
@@ -59,7 +64,13 @@ type Phase =
   | {name: 'input'; warning?: string}
   | {name: 'probing'; status: string}
   | {name: 'picking'}
-  | {name: 'downloading'; choice: DownloadChoice; progress?: DownloadProgress; processing: boolean}
+  | {
+      name: 'downloading'
+      choice: DownloadChoice
+      progress?: DownloadProgress
+      processing: boolean
+      refreshing?: boolean
+    }
   | {name: 'done'; filepath: string}
   | {name: 'error'; message: string}
 
@@ -238,7 +249,9 @@ export function App({
         } catch (error) {
           if (controller.signal.aborted) throw error
           // media urls in the cached info can expire — retry with a fresh extraction
-          setPhase(prev => (prev.name === 'downloading' ? {...prev, progress: undefined} : prev))
+          setPhase(prev =>
+            prev.name === 'downloading' ? {...prev, progress: undefined, refreshing: true} : prev,
+          )
           filepath = await download(base, handlers, controller.signal)
         }
         onOutcome({filepath})
@@ -326,24 +339,28 @@ export function App({
 
       {phase.name === 'downloading' && (
         <Box flexDirection="column" alignItems="center">
+          <Gap />
           <Text color={theme.gray}>
             {info?.title ? `${truncate(info.title, 42)} · ` : ''}
             {phase.choice.label}
           </Text>
           <Gap />
+          {/* every branch is exactly three rows — bar, gap, meta — so the layout never jumps */}
           {phase.processing ? (
             <>
+              <ProgressBar percent={1} />
+              <Gap />
               <Text>
                 <Text color={theme.primary}>
                   <Spinner type="dots" />
                 </Text>
                 <Text color={theme.gray}> processing…</Text>
               </Text>
-              <Text> </Text>
             </>
           ) : phase.progress?.totalBytes ? (
             <>
               <ProgressBar percent={phase.progress.downloadedBytes / phase.progress.totalBytes} />
+              <Gap />
               <Text color={theme.gray}>{downloadMeta(phase.progress)}</Text>
             </>
           ) : phase.progress ? (
@@ -354,17 +371,21 @@ export function App({
                 </Text>
                 <Text color={theme.gray}> downloading…</Text>
               </Text>
+              <Gap />
               <Text color={theme.gray}>{indeterminateMeta(phase.progress)}</Text>
             </>
           ) : (
             <>
+              <ProgressBar percent={0} />
+              <Gap />
               <Text>
                 <Text color={theme.primary}>
                   <Spinner type="dots" />
                 </Text>
-                <Text color={theme.gray}> starting download…</Text>
+                <Text color={theme.gray}>
+                  {phase.refreshing ? ' link expired — grabbing a fresh one…' : ' starting download…'}
+                </Text>
               </Text>
-              <Text> </Text>
             </>
           )}
         </Box>

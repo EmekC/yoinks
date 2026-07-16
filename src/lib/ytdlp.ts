@@ -200,6 +200,8 @@ export type DownloadProgress = {
   speed?: number
   eta?: number
   part: number
+  /** How many files this download resolves to (video+audio merges are 2). */
+  totalParts: number
 }
 
 export type DownloadHandlers = {
@@ -253,6 +255,7 @@ export function download(
     let stderr = ''
     let filepath = ''
     let part = 0
+    let totalParts = 1
     let lastDownloaded = 0
     let buffer = ''
     // every file yt-dlp writes this run, so a cancel can clean up after itself
@@ -276,7 +279,11 @@ export function download(
             speed: toNumber(speed),
             eta: toNumber(eta),
             part,
+            totalParts,
           })
+        } else if (line.includes('Downloading 1 format(s):')) {
+          // "[info] xxx: Downloading 1 format(s): 395+251" — each id is one file
+          totalParts = (line.split('format(s):')[1] ?? '').trim().split('+').length
         } else if (line.includes('[Merger]') || line.includes('[ExtractAudio]')) {
           const merging = /^\[Merger\] Merging formats into "(.+)"$/.exec(line)?.[1]
           const extracting = /^\[ExtractAudio\] Destination: (.+)$/.exec(line)?.[1]
