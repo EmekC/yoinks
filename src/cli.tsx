@@ -1,10 +1,13 @@
 import React from 'react'
+import {createRequire} from 'node:module'
 import {render} from 'ink'
 import {App, type Outcome} from './app.js'
 import {readClipboard} from './lib/clipboard.js'
 import {isProbablyUrl} from './lib/platforms.js'
 
-const VERSION = '0.1.0'
+// read at runtime from the shipped package.json so npm version bumps
+// can't drift from a hardcoded constant
+const VERSION: string = createRequire(import.meta.url)('../package.json').version
 
 const HELP = `
   yoinks — yoink any video. paste. yoink. done.
