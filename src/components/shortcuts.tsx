@@ -7,9 +7,9 @@ export function Shortcuts({items}: {items: Array<[key: string, label: string]>})
     <Text>
       {items.map(([key, label], index) => (
         <Text key={`${key}-${label}`}>
-          {index > 0 ? <Text dimColor>{'  ·  '}</Text> : null}
-          <Text color={theme.text}>{key}</Text>
-          <Text dimColor> {label}</Text>
+          {index > 0 ? <Text color={theme.gray}>{'  ·  '}</Text> : null}
+          <Text color={theme.primary}>{key}</Text>
+          <Text color={theme.gray}> {label}</Text>
         </Text>
       ))}
     </Text>

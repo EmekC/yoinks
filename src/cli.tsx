@@ -1,6 +1,8 @@
 import React from 'react'
 import {render} from 'ink'
 import {App, type Outcome} from './app.js'
+import {readClipboard} from './lib/clipboard.js'
+import {isProbablyUrl} from './lib/platforms.js'
 
 const VERSION = '0.1.0'
 
@@ -38,6 +40,14 @@ if (args.includes('-v') || args.includes('--version')) {
 const initialUrl = args.find(arg => !arg.startsWith('-'))
 
 const isTTY = Boolean(process.stdout.isTTY)
+
+// no url given — prefill the prompt when the clipboard already holds one
+let clipboardUrl: string | undefined
+if (!initialUrl && isTTY) {
+  const clipped = readClipboard().trim()
+  // reject multi-line clipboard content — new URL() silently strips newlines
+  if (clipped && !/\s/.test(clipped) && isProbablyUrl(clipped)) clipboardUrl = clipped
+}
 const enterAltScreen = () => process.stdout.write('\x1b[?1049h\x1b[H')
 const leaveAltScreen = () => process.stdout.write('\x1b[?1049l')
 
@@ -57,7 +67,9 @@ if (isTTY) {
 }
 
 let outcome: Outcome = {}
-const {waitUntilExit} = render(<App initialUrl={initialUrl} onOutcome={result => (outcome = result)} />)
+const {waitUntilExit} = render(
+  <App initialUrl={initialUrl} clipboardUrl={clipboardUrl} onOutcome={result => (outcome = result)} />,
+)
 
 await waitUntilExit()
 

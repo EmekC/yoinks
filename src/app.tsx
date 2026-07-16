@@ -4,14 +4,15 @@ import path from 'node:path'
 import {Box, Text, useApp, useInput, useStdout} from 'ink'
 import SelectInput from 'ink-select-input'
 import Spinner from 'ink-spinner'
-import TextInput from 'ink-text-input'
 import {FramedInput} from './components/framed-input.js'
 import {FullScreen} from './components/fullscreen.js'
 import {Logo} from './components/logo.js'
 import {Panel} from './components/panel.js'
 import {ProgressBar} from './components/progress-bar.js'
 import {Shortcuts} from './components/shortcuts.js'
+import {TextInput} from './components/text-input.js'
 import {formatBytes, formatDuration, formatEta, formatSpeed, shortenPath, truncate} from './lib/format.js'
+import {addToHistory, loadHistory} from './lib/history.js'
 import {detectPlatform, isProbablyUrl, type Platform} from './lib/platforms.js'
 import {theme} from './theme.js'
 import {
@@ -35,6 +36,20 @@ const Gap = ({lines = 1}: {lines?: number}) => (
     ))}
   </Box>
 )
+
+// fixed-width slots — the centered line must not change width as values tick,
+// otherwise the whole layout shifts on every progress update
+function downloadMeta(progress: DownloadProgress): string {
+  const speed = progress.speed ? formatSpeed(progress.speed) : ''
+  const eta = progress.eta ? `${formatEta(progress.eta)} left` : ''
+  return `${speed.padStart(10)}  ${eta.padEnd(12)}`
+}
+
+function indeterminateMeta(progress: DownloadProgress): string {
+  const bytes = formatBytes(progress.downloadedBytes)
+  const speed = progress.speed ? formatSpeed(progress.speed) : ''
+  return `${bytes.padStart(8)}  ${speed.padEnd(10)}`
+}
 
 export type Outcome = {filepath?: string}
 
@@ -66,11 +81,20 @@ const HINTS: Record<Phase['name'], Array<[string, string]>> = {
   ],
 }
 
-export function App({initialUrl, onOutcome}: {initialUrl?: string; onOutcome: (outcome: Outcome) => void}) {
+export function App({
+  initialUrl,
+  clipboardUrl,
+  onOutcome,
+}: {
+  initialUrl?: string
+  clipboardUrl?: string
+  onOutcome: (outcome: Outcome) => void
+}) {
   const {exit} = useApp()
   const {stdout} = useStdout()
   const [url, setUrl] = useState(initialUrl ?? '')
-  const [urlInput, setUrlInput] = useState('')
+  const [urlInput, setUrlInput] = useState(clipboardUrl ?? '')
+  const [history, setHistory] = useState(loadHistory)
   const [platform, setPlatform] = useState<Platform>()
   const [info, setInfo] = useState<VideoInfo>()
   const [choices, setChoices] = useState<DownloadChoice[]>([])
@@ -153,6 +177,7 @@ export function App({initialUrl, onOutcome}: {initialUrl?: string; onOutcome: (o
           filepath = await download(base, handlers)
         }
         onOutcome({filepath})
+        setHistory(addToHistory(url))
         setPhase({name: 'done', filepath})
       } catch (error) {
         setPhase({name: 'error', message: error instanceof Error ? error.message : String(error)})
@@ -160,14 +185,17 @@ export function App({initialUrl, onOutcome}: {initialUrl?: string; onOutcome: (o
     })()
   }
 
-  const hints = HINTS[phase.name]
+  let hints = HINTS[phase.name]
+  if (phase.name === 'input' && history.length > 0) {
+    hints = [hints[0]!, ['↑', 'history'], ...hints.slice(1)]
+  }
 
   return (
     <FullScreen>
       <Logo />
-      <Gap lines={2} />
-      <Text color={theme.text}>yoink any video. no shady ads.</Text>
-      <Text dimColor>youtube · x · instagram · threads · tiktok · +1800 more</Text>
+      <Gap />
+      <Text color={theme.primary}>yoink any video. no shady ads.</Text>
+      <Text color={theme.gray}>youtube · x · instagram · threads · tiktok · +1800 more</Text>
       <Gap />
 
       {phase.name === 'input' && (
@@ -178,23 +206,30 @@ export function App({initialUrl, onOutcome}: {initialUrl?: string; onOutcome: (o
               onChange={setUrlInput}
               onSubmit={handleUrlSubmit}
               placeholder="https://youtube.com/watch?v=…"
+              width={boxWidth - 6}
+              history={history}
+              submitOnPaste={isProbablyUrl}
             />
           </FramedInput>
-          {phase.warning ? <Text color={theme.muted}>✗ {phase.warning}</Text> : null}
+          {phase.warning ? (
+            <Text color={theme.gray}>✗ {phase.warning}</Text>
+          ) : clipboardUrl && urlInput === clipboardUrl ? (
+            <Text color={theme.gray}>from your clipboard — ↵ to yoink it</Text>
+          ) : null}
         </Box>
       )}
 
       {phase.name === 'probing' && (
         <Box flexDirection="column" alignItems="center">
           <FramedInput title={platform ? platform.label : 'Paste a link'} width={boxWidth}>
-            <Text dimColor>{url.length > boxWidth - 8 ? `${url.slice(0, boxWidth - 9)}…` : url}</Text>
+            <Text color={theme.gray}>{url.length > boxWidth - 8 ? `${url.slice(0, boxWidth - 9)}…` : url}</Text>
           </FramedInput>
           <Gap />
           <Text>
-            <Text color={theme.text}>
+            <Text color={theme.primary}>
               <Spinner type="dots" />
             </Text>
-            <Text dimColor> {phase.status}</Text>
+            <Text color={theme.gray}> {phase.status}</Text>
           </Text>
         </Box>
       )}
@@ -202,11 +237,11 @@ export function App({initialUrl, onOutcome}: {initialUrl?: string; onOutcome: (o
       {phase.name === 'picking' && platform && (
         <Box width={Math.min(columns - 4, 78)}>
           <Box flexDirection="column" flexGrow={1} flexBasis={0} paddingTop={1} paddingRight={3}>
-            <Text bold color={theme.bright}>
+            <Text bold color={theme.primary}>
               {info?.title}
             </Text>
             <Gap />
-            <Text dimColor>
+            <Text color={theme.gray}>
               ▸ {platform.label}
               {info?.duration ? ` · ${formatDuration(info.duration)}` : ''}
               {info?.uploader ? ` · ${info.uploader}` : ''}
@@ -227,39 +262,46 @@ export function App({initialUrl, onOutcome}: {initialUrl?: string; onOutcome: (o
 
       {phase.name === 'downloading' && (
         <Box flexDirection="column" alignItems="center">
-          <Text dimColor>
+          <Text color={theme.gray}>
             {info?.title ? `${truncate(info.title, 42)} · ` : ''}
             {phase.choice.label}
           </Text>
           <Gap />
           {phase.processing ? (
-            <Text>
-              <Text color={theme.text}>
-                <Spinner type="dots" />
+            <>
+              <Text>
+                <Text color={theme.primary}>
+                  <Spinner type="dots" />
+                </Text>
+                <Text color={theme.gray}> processing…</Text>
               </Text>
-              <Text dimColor> processing…</Text>
-            </Text>
+              <Text> </Text>
+            </>
           ) : phase.progress?.totalBytes ? (
-            <Text>
+            <>
               <ProgressBar percent={phase.progress.downloadedBytes / phase.progress.totalBytes} />
-              {phase.progress.speed ? <Text dimColor> · {formatSpeed(phase.progress.speed)}</Text> : null}
-              {phase.progress.eta ? <Text dimColor> · {formatEta(phase.progress.eta)} left</Text> : null}
-            </Text>
+              <Text color={theme.gray}>{downloadMeta(phase.progress)}</Text>
+            </>
           ) : phase.progress ? (
-            <Text>
-              <Text color={theme.text}>
-                <Spinner type="dots" />
+            <>
+              <Text>
+                <Text color={theme.primary}>
+                  <Spinner type="dots" />
+                </Text>
+                <Text color={theme.gray}> downloading…</Text>
               </Text>
-              <Text dimColor> downloading · {formatBytes(phase.progress.downloadedBytes)}</Text>
-              {phase.progress.speed ? <Text dimColor> · {formatSpeed(phase.progress.speed)}</Text> : null}
-            </Text>
+              <Text color={theme.gray}>{indeterminateMeta(phase.progress)}</Text>
+            </>
           ) : (
-            <Text>
-              <Text color={theme.text}>
-                <Spinner type="dots" />
+            <>
+              <Text>
+                <Text color={theme.primary}>
+                  <Spinner type="dots" />
+                </Text>
+                <Text color={theme.gray}> starting download…</Text>
               </Text>
-              <Text dimColor> starting download…</Text>
-            </Text>
+              <Text> </Text>
+            </>
           )}
         </Box>
       )}
@@ -267,20 +309,20 @@ export function App({initialUrl, onOutcome}: {initialUrl?: string; onOutcome: (o
       {phase.name === 'done' && (
         <Box flexDirection="column" alignItems="center">
           <Text>
-            <Text bold color={theme.bright}>✓ yoinked! </Text>
-            <Text color={theme.text}>find your file in:</Text>
+            <Text bold color={theme.primary}>✓ yoinked! </Text>
+            <Text color={theme.primary}>find your file in:</Text>
           </Text>
-          <Text dimColor>{shortenPath(phase.filepath, os.homedir(), 60)}</Text>
+          <Text color={theme.gray}>{shortenPath(phase.filepath, os.homedir(), 60)}</Text>
           <Gap />
-          <Box borderStyle="round" borderColor={theme.text} paddingX={3}>
-            <Text bold color={theme.bright}>↵ yoink another</Text>
+          <Box borderStyle="round" borderColor={theme.gray} paddingX={3}>
+            <Text bold color={theme.primary}>↵ yoink another</Text>
           </Box>
         </Box>
       )}
 
       {phase.name === 'error' && (
         <Box flexDirection="column" alignItems="center" width={Math.min(columns - 6, 72)}>
-          <Text bold color={theme.bright}>✗ {phase.message}</Text>
+          <Text bold color={theme.primary}>✗ {phase.message}</Text>
         </Box>
       )}
 

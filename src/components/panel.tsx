@@ -13,14 +13,14 @@ export function Panel({title, width, children}: {title: string; width: number; c
   return (
     <Box flexDirection="column" width={width}>
       <Text>
-        <Text color={theme.border}>{'╭─ '}</Text>
-        <Text color={theme.text}>{title}</Text>
-        <Text color={theme.border}>{` ${'─'.repeat(tail)}╮`}</Text>
+        <Text color={theme.gray}>{'╭─ '}</Text>
+        <Text color={theme.primary}>{title}</Text>
+        <Text color={theme.gray}>{` ${'─'.repeat(tail)}╮`}</Text>
       </Text>
       <Box
         width={width}
         borderStyle="round"
-        borderColor={theme.border}
+        borderColor={theme.gray}
         borderTop={false}
         flexDirection="column"
         paddingX={2}

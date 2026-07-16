@@ -13,19 +13,19 @@ export function FramedInput({title, width, children}: {title: string; width: num
   return (
     <Box flexDirection="column" width={width}>
       <Text>
-        <Text color={theme.border}>{'╭─ '}</Text>
-        <Text color={theme.text}>{title}</Text>
-        <Text color={theme.border}>{` ${'─'.repeat(tail)}╮`}</Text>
+        <Text color={theme.gray}>{'╭─ '}</Text>
+        <Text color={theme.primary}>{title}</Text>
+        <Text color={theme.gray}>{` ${'─'.repeat(tail)}╮`}</Text>
       </Text>
       <Box width={width} height={1} overflow="hidden">
-        <Text color={theme.border}>│ </Text>
-        <Text color={theme.bright}>❯ </Text>
+        <Text color={theme.gray}>│ </Text>
+        <Text color={theme.primary}>❯ </Text>
         <Box flexGrow={1} height={1} overflow="hidden">
           {children}
         </Box>
-        <Text color={theme.border}> │</Text>
+        <Text color={theme.gray}> │</Text>
       </Box>
-      <Text color={theme.border}>{`╰${'─'.repeat(inner)}╯`}</Text>
+      <Text color={theme.gray}>{`╰${'─'.repeat(inner)}╯`}</Text>
     </Box>
   )
 }
