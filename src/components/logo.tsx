@@ -99,7 +99,9 @@ export function Logo() {
   }, [phase, animated])
 
   return (
-    <Box flexDirection="column">
+    // flexShrink=0 — the logo must keep its 3 rows even when a phase's
+    // content would overflow the screen, or yoga crushes it first
+    <Box flexDirection="column" flexShrink={0}>
       {GRID.map((_, row) => (
         <Text key={row}>{renderRow(row, phase, t, delays[row], theme)}</Text>
       ))}

@@ -53,14 +53,23 @@ function ChoiceItem({isSelected, label}: ItemProps) {
   )
 }
 
-// explicit blank lines — empty <Box height={1}/> spacers can collapse
+// explicit blank lines — empty <Box height={1}/> spacers can collapse, and
+// ink boxes default to flexShrink=1, so spacers are the first thing yoga
+// crushes when content overflows the terminal
 const Gap = ({lines = 1}: {lines?: number}) => (
-  <Box flexDirection="column">
+  <Box flexDirection="column" flexShrink={0}>
     {Array.from({length: lines}, (_, i) => (
       <Text key={i}> </Text>
     ))}
   </Box>
 )
+
+// the header (logo → tagline) and hint bar must not move between phases, so
+// every phase renders inside a stage of this many rows — sized for the
+// tallest state: the picker panel with 9 choices (title + choices + border)
+const HEADER_ROWS = 7
+const FOOTER_ROWS = 3
+const MAX_STAGE_ROWS = 11
 
 // fixed-width slots — the centered line must not change width as values tick,
 // otherwise the whole layout shifts on every progress update
@@ -172,6 +181,8 @@ function AppContent({
   const columns = stdout?.columns && stdout.columns > 0 ? stdout.columns : 80
   const boxWidth = Math.max(14, Math.min(64, columns - 6))
   const contentWidth = Math.max(10, Math.min(columns - 4, 78))
+  const rows = stdout?.rows && stdout.rows > 1 ? stdout.rows : 24
+  const stageHeight = Math.max(6, Math.min(MAX_STAGE_ROWS, rows - 1 - HEADER_ROWS - FOOTER_ROWS))
 
   const startProbe = useCallback(async (targetUrl: string) => {
     const controller = new AbortController()
@@ -342,152 +353,156 @@ function AppContent({
       <Text color={theme.gray} dimColor={theme.dimSecondary}>youtube · x · instagram · threads · tiktok · +1800 more</Text>
       <Gap />
 
-      {phase.name === 'input' && (
-        <Box flexDirection="column" alignItems="center">
-          <FramedInput title="Paste a link" width={boxWidth} button={YOINK_BUTTON}>
-            <TextInput
-              value={urlInput}
-              onChange={setUrlInput}
-              onSubmit={handleUrlSubmit}
-              placeholder="https://youtube.com/watch?v=…"
-              width={boxWidth - 6}
-              history={history}
-              submitOnPaste={isProbablyUrl}
-              onTab={() => {
-                if (clipboardOffered) setUrlInput(clipboardUrl!)
-              }}
-            />
-          </FramedInput>
-          {phase.warning ? (
-            <Text color={theme.gray} dimColor={theme.dimSecondary}>✗ {phase.warning}</Text>
-          ) : clipboardOffered ? (
-            <Text color={theme.gray} dimColor={theme.dimSecondary}>link in your clipboard — ⇥ to paste it</Text>
-          ) : clipboardAccepted ? (
-            <Text color={theme.gray} dimColor={theme.dimSecondary}>from your clipboard — ↵ to yoink it</Text>
-          ) : null}
-        </Box>
-      )}
+      {/* every phase renders in the same fixed-height stage, anchored to its
+          top, so the header above and the hint bar below never move */}
+      <Box flexDirection="column" alignItems="center" height={stageHeight} flexShrink={0}>
+        {phase.name === 'input' && (
+          <Box flexDirection="column" alignItems="center">
+            <FramedInput title="Paste a link" width={boxWidth} button={YOINK_BUTTON}>
+              <TextInput
+                value={urlInput}
+                onChange={setUrlInput}
+                onSubmit={handleUrlSubmit}
+                placeholder="https://youtube.com/watch?v=…"
+                width={boxWidth - 6}
+                history={history}
+                submitOnPaste={isProbablyUrl}
+                onTab={() => {
+                  if (clipboardOffered) setUrlInput(clipboardUrl!)
+                }}
+              />
+            </FramedInput>
+            {phase.warning ? (
+              <Text color={theme.gray} dimColor={theme.dimSecondary}>✗ {phase.warning}</Text>
+            ) : clipboardOffered ? (
+              <Text color={theme.gray} dimColor={theme.dimSecondary}>link in your clipboard — ⇥ to paste it</Text>
+            ) : clipboardAccepted ? (
+              <Text color={theme.gray} dimColor={theme.dimSecondary}>from your clipboard — ↵ to yoink it</Text>
+            ) : null}
+          </Box>
+        )}
 
-      {phase.name === 'probing' && (
-        <Box flexDirection="column" alignItems="center">
-          <FramedInput title={platform ? platform.label : 'Paste a link'} width={boxWidth} button={YOINK_BUTTON} buttonDim>
-            <Text color={theme.gray} dimColor={theme.dimSecondary}>{url.length > boxWidth - 8 ? `${url.slice(0, boxWidth - 9)}…` : url}</Text>
-          </FramedInput>
-        </Box>
-      )}
+        {phase.name === 'probing' && (
+          <Box flexDirection="column" alignItems="center">
+            <FramedInput title={platform ? platform.label : 'Paste a link'} width={boxWidth} button={YOINK_BUTTON} buttonDim>
+              <Text color={theme.gray} dimColor={theme.dimSecondary}>{url.length > boxWidth - 8 ? `${url.slice(0, boxWidth - 9)}…` : url}</Text>
+            </FramedInput>
+          </Box>
+        )}
 
-      {phase.name === 'picking' && platform && (
-        <Box width={contentWidth}>
-          <Box flexDirection="column" flexGrow={1} flexBasis={0} paddingTop={1} paddingRight={3}>
-            {/* wrapped by hand so continuation lines stay flush left —
-                ink's wrapping keeps the break's space as a 1-cell indent */}
-            {wrapText(info?.title ?? '', Math.max(10, contentWidth - 41)).map((line, index) => (
-              <Text key={index} bold color={theme.primary}>
-                {line}
+        {phase.name === 'picking' && platform && (
+          <Box width={contentWidth}>
+            <Box flexDirection="column" flexGrow={1} flexBasis={0} paddingTop={1} paddingRight={3}>
+              {/* wrapped by hand so continuation lines stay flush left —
+                  ink's wrapping keeps the break's space as a 1-cell indent */}
+              {wrapText(info?.title ?? '', Math.max(10, contentWidth - 41)).map((line, index) => (
+                <Text key={index} bold color={theme.primary}>
+                  {line}
+                </Text>
+              ))}
+              <Gap />
+              <Text color={theme.gray} dimColor={theme.dimSecondary}>
+                ▸ {platform.label}
+                {info?.duration ? ` · ${formatDuration(info.duration)}` : ''}
+                {info?.uploader ? ` · ${info.uploader}` : ''}
               </Text>
-            ))}
+            </Box>
+            <Panel title="Download" width={38}>
+              <SelectInput
+                indicatorComponent={ChoiceIndicator}
+                itemComponent={ChoiceItem}
+                items={choices.map((choice, index) => ({
+                  key: String(index),
+                  label: choiceLabel(choice),
+                  value: index,
+                }))}
+                onSelect={handlePick}
+                onHighlight={item => (highlightRef.current = item.value)}
+              />
+            </Panel>
+          </Box>
+        )}
+
+        {phase.name === 'downloading' && (
+          <Box flexDirection="column" alignItems="center">
             <Gap />
             <Text color={theme.gray} dimColor={theme.dimSecondary}>
-              ▸ {platform.label}
-              {info?.duration ? ` · ${formatDuration(info.duration)}` : ''}
-              {info?.uploader ? ` · ${info.uploader}` : ''}
+              {info?.title ? `${truncate(info.title, 42)} · ` : ''}
+              {phase.choice.label}
             </Text>
+            <Gap />
+            {/* every branch is exactly three rows — bar, gap, meta — so the layout never jumps */}
+            {phase.processing ? (
+              <>
+                <ProgressBar percent={1} />
+                <Gap />
+                <Text>
+                  <Text color={theme.primary}>
+                    <Spinner type="dots" />
+                  </Text>
+                  <Text color={theme.gray} dimColor={theme.dimSecondary}> processing…</Text>
+                </Text>
+              </>
+            ) : phase.progress?.totalBytes ? (
+              <>
+                <ProgressBar percent={phase.progress.downloadedBytes / phase.progress.totalBytes} />
+                <Gap />
+                <Text color={theme.gray} dimColor={theme.dimSecondary}>{downloadMeta(phase.progress)}</Text>
+              </>
+            ) : phase.progress ? (
+              <>
+                <Text>
+                  <Text color={theme.primary}>
+                    <Spinner type="dots" />
+                  </Text>
+                  <Text color={theme.gray} dimColor={theme.dimSecondary}> downloading…</Text>
+                </Text>
+                <Gap />
+                <Text color={theme.gray} dimColor={theme.dimSecondary}>{indeterminateMeta(phase.progress)}</Text>
+              </>
+            ) : (
+              <>
+                <ProgressBar percent={0} />
+                <Gap />
+                <Text>
+                  <Text color={theme.primary}>
+                    <Spinner type="dots" />
+                  </Text>
+                  <Text color={theme.gray} dimColor={theme.dimSecondary}>
+                    {phase.refreshing ? ' link expired — grabbing a fresh one…' : ' starting download…'}
+                  </Text>
+                </Text>
+              </>
+            )}
           </Box>
-          <Panel title="Download" width={38}>
-            <SelectInput
-              indicatorComponent={ChoiceIndicator}
-              itemComponent={ChoiceItem}
-              items={choices.map((choice, index) => ({
-                key: String(index),
-                label: choiceLabel(choice),
-                value: index,
-              }))}
-              onSelect={handlePick}
-              onHighlight={item => (highlightRef.current = item.value)}
-            />
-          </Panel>
-        </Box>
-      )}
+        )}
 
-      {phase.name === 'downloading' && (
-        <Box flexDirection="column" alignItems="center">
-          <Gap />
-          <Text color={theme.gray} dimColor={theme.dimSecondary}>
-            {info?.title ? `${truncate(info.title, 42)} · ` : ''}
-            {phase.choice.label}
-          </Text>
-          <Gap />
-          {/* every branch is exactly three rows — bar, gap, meta — so the layout never jumps */}
-          {phase.processing ? (
-            <>
-              <ProgressBar percent={1} />
-              <Gap />
-              <Text>
-                <Text color={theme.primary}>
-                  <Spinner type="dots" />
-                </Text>
-                <Text color={theme.gray} dimColor={theme.dimSecondary}> processing…</Text>
-              </Text>
-            </>
-          ) : phase.progress?.totalBytes ? (
-            <>
-              <ProgressBar percent={phase.progress.downloadedBytes / phase.progress.totalBytes} />
-              <Gap />
-              <Text color={theme.gray} dimColor={theme.dimSecondary}>{downloadMeta(phase.progress)}</Text>
-            </>
-          ) : phase.progress ? (
-            <>
-              <Text>
-                <Text color={theme.primary}>
-                  <Spinner type="dots" />
-                </Text>
-                <Text color={theme.gray} dimColor={theme.dimSecondary}> downloading…</Text>
-              </Text>
-              <Gap />
-              <Text color={theme.gray} dimColor={theme.dimSecondary}>{indeterminateMeta(phase.progress)}</Text>
-            </>
-          ) : (
-            <>
-              <ProgressBar percent={0} />
-              <Gap />
-              <Text>
-                <Text color={theme.primary}>
-                  <Spinner type="dots" />
-                </Text>
-                <Text color={theme.gray} dimColor={theme.dimSecondary}>
-                  {phase.refreshing ? ' link expired — grabbing a fresh one…' : ' starting download…'}
-                </Text>
-              </Text>
-            </>
-          )}
-        </Box>
-      )}
-
-      {phase.name === 'done' && (
-        <Box flexDirection="column" alignItems="center">
-          <Text>
-            <Text bold color={theme.primary}>✓ yoinked! </Text>
-            <Text color={theme.primary}>find your file in:</Text>
-          </Text>
-          <Text color={theme.gray} dimColor={theme.dimSecondary}>{shortenPath(phase.filepath, os.homedir(), 60)}</Text>
-          <Gap />
-          <Box
-            borderStyle="round"
-            borderColor={theme.gray}
-            borderDimColor={theme.dimSecondary}
-            borderBackgroundColor={theme.background}
-            paddingX={3}
-          >
-            <Text bold color={theme.primary}>{DONE_LABEL}</Text>
+        {phase.name === 'done' && (
+          <Box flexDirection="column" alignItems="center">
+            <Text>
+              <Text bold color={theme.primary}>✓ yoinked! </Text>
+              <Text color={theme.primary}>find your file in:</Text>
+            </Text>
+            <Text color={theme.gray} dimColor={theme.dimSecondary}>{shortenPath(phase.filepath, os.homedir(), 60)}</Text>
+            <Gap />
+            <Box
+              borderStyle="round"
+              borderColor={theme.gray}
+              borderDimColor={theme.dimSecondary}
+              borderBackgroundColor={theme.background}
+              paddingX={3}
+            >
+              <Text bold color={theme.primary}>{DONE_LABEL}</Text>
+            </Box>
           </Box>
-        </Box>
-      )}
+        )}
 
-      {phase.name === 'error' && (
-        <Box flexDirection="column" alignItems="center" width={Math.max(10, Math.min(columns - 6, 72))}>
-          <Text bold color={theme.primary}>✗ {phase.message}</Text>
-        </Box>
-      )}
+        {phase.name === 'error' && (
+          <Box flexDirection="column" alignItems="center" width={Math.max(10, Math.min(columns - 6, 72))}>
+            <Text bold color={theme.primary}>✗ {phase.message}</Text>
+          </Box>
+        )}
+      </Box>
 
       {hints.length > 0 ? (
         <>
